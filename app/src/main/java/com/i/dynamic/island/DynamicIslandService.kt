@@ -28,103 +28,86 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
 
 class DynamicIslandService : Service() {
-    
+
     private lateinit var windowManager: WindowManager
     private var islandView: ComposeView? = null
     private lateinit var params: WindowManager.LayoutParams
     private lateinit var prefs: SharedPreferences
-    
+
     companion object {
         const val CHANNEL_ID = "dynamic_island_channel"
         const val NOTIFICATION_ID = 1
-        
-        // Настройки
+
         const val KEY_ISLAND_TYPE = "island_type"
         const val KEY_WIDTH = "island_width"
         const val KEY_HEIGHT = "island_height"
         const val KEY_POS_X = "pos_x"
         const val KEY_POS_Y = "pos_y"
         const val KEY_IS_DRAGGABLE = "is_draggable"
-        
-        // Типы острова
-        const val TYPE_PILL = 0        // Таблетка (как iPhone)
-        const val TYPE_CIRCLE = 1      // Круг (камера)
-        const val TYPE_CAPSULE = 2     // Капсула
-        
-        // Размеры по умолчанию
+
+        const val TYPE_PILL = 0
+        const val TYPE_CIRCLE = 1
+        const val TYPE_CAPSULE = 2
+
         const val DEFAULT_WIDTH = 200
         const val DEFAULT_HEIGHT = 50
     }
-    
+
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         prefs = getSharedPreferences("dynamic_island_prefs", Context.MODE_PRIVATE)
         createNotificationChannel()
     }
-    
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = createNotification()
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        
-        // Обновляем настройки из intent
-        intent?.let {
-            updateSettingsFromIntent(it)
-        }
-        
+
+        intent?.let { updateSettingsFromIntent(it) }
+
         showIsland()
         return START_STICKY
     }
-    
+
     private fun updateSettingsFromIntent(intent: Intent) {
         val editor = prefs.edit()
-        
+
         intent.getIntExtra(KEY_ISLAND_TYPE, -1).let { if (it >= 0) editor.putInt(KEY_ISLAND_TYPE, it) }
         intent.getIntExtra(KEY_WIDTH, -1).let { if (it > 0) editor.putInt(KEY_WIDTH, it) }
         intent.getIntExtra(KEY_HEIGHT, -1).let { if (it > 0) editor.putInt(KEY_HEIGHT, it) }
         intent.getBooleanExtra(KEY_IS_DRAGGABLE, false).let { editor.putBoolean(KEY_IS_DRAGGABLE, it) }
-        
+
         editor.apply()
     }
-    
+
     private fun showIsland() {
-        // Удаляем старый вид если есть
         islandView?.let {
             try {
                 windowManager.removeView(it)
             } catch (e: Exception) {}
         }
-        
+
         val islandType = prefs.getInt(KEY_ISLAND_TYPE, TYPE_PILL)
         val width = prefs.getInt(KEY_WIDTH, DEFAULT_WIDTH)
         val height = prefs.getInt(KEY_HEIGHT, DEFAULT_HEIGHT)
         val posX = prefs.getInt(KEY_POS_X, 0)
         val posY = prefs.getInt(KEY_POS_Y, 50)
         val isDraggable = prefs.getBoolean(KEY_IS_DRAGGABLE, true)
-        
+
         params = WindowManager.LayoutParams(
             width,
             height,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
-            else 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
                 WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
@@ -134,7 +117,7 @@ class DynamicIslandService : Service() {
             x = posX
             y = posY
         }
-        
+
         val composeView = ComposeView(this).apply {
             setContent {
                 DynamicIslandContent(
@@ -143,9 +126,8 @@ class DynamicIslandService : Service() {
                     onDrag = { dx, dy ->
                         params.x += dx.toInt()
                         params.y += dy.toInt()
-                        windowManager.updateViewLayout(this@apply, params)
-                        
-                        // Сохраняем позицию
+                        windowManager.updateViewLayout(this, params)
+
                         prefs.edit()
                             .putInt(KEY_POS_X, params.x)
                             .putInt(KEY_POS_Y, params.y)
@@ -154,24 +136,17 @@ class DynamicIslandService : Service() {
                 )
             }
         }
-        
-        // Устанавливаем Lifecycle для Compose
-        val lifecycleOwner = ServiceLifecycleOwner()
-        lifecycleOwner.onCreate()
-        ViewTreeLifecycleOwner.set(composeView, lifecycleOwner)
-        
+
         islandView = composeView
         windowManager.addView(composeView, params)
     }
-    
+
     @Composable
     fun DynamicIslandContent(
         islandType: Int,
         isDraggable: Boolean,
         onDrag: (Float, Float) -> Unit
     ) {
-        var dragOffset by remember { mutableStateOf(0f to 0f) }
-        
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -195,7 +170,7 @@ class DynamicIslandService : Service() {
             }
         }
     }
-    
+
     @Composable
     fun PillIsland() {
         Box(
@@ -205,7 +180,6 @@ class DynamicIslandService : Service() {
                 .background(Color.Black),
             contentAlignment = Alignment.CenterEnd
         ) {
-            // Камера
             Box(
                 modifier = Modifier
                     .padding(end = 12.dp)
@@ -223,7 +197,7 @@ class DynamicIslandService : Service() {
             }
         }
     }
-    
+
     @Composable
     fun CircleIsland() {
         Box(
@@ -249,7 +223,7 @@ class DynamicIslandService : Service() {
             }
         }
     }
-    
+
     @Composable
     fun CapsuleIsland() {
         Box(
@@ -278,7 +252,7 @@ class DynamicIslandService : Service() {
             }
         }
     }
-    
+
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -288,60 +262,35 @@ class DynamicIslandService : Service() {
             description = "Keeps Dynamic Island running"
             setShowBadge(false)
         }
-        
+
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
-    
+
     private fun createNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        
+
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("🏝️ Dynamic Island активен")
+            .setContentTitle("Dynamic Island активен")
             .setContentText("Нажми для настройки")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
     }
-    
+
     override fun onBind(intent: Intent?): IBinder? = null
-    
+
     override fun onDestroy() {
         super.onDestroy()
         islandView?.let {
             try {
                 windowManager.removeView(it)
             } catch (e: Exception) {}
-        }
-    }
-    
-    // LifecycleOwner для Compose в Service
-    inner class ServiceLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
-        private val lifecycleRegistry = LifecycleRegistry(this)
-        private val savedStateRegistryController = SavedStateRegistryController.create(this)
-        
-        override val lifecycle: Lifecycle
-            get() = lifecycleRegistry
-            
-        override val savedStateRegistry: SavedStateRegistry
-            get() = savedStateRegistryController.savedStateRegistry
-        
-        fun onCreate() {
-            savedStateRegistryController.performRestore(null)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-        }
-        
-        fun onDestroy() {
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         }
     }
 }

@@ -176,14 +176,14 @@ fun SettingsScreen(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .padding(end = 8.dp)
-                            .size(height * 0.5.dp)
+                            .size((height * 0.5f).dp)
                             .clip(CircleShape)
                             .background(Color(0xFF333333))
                     )
                 } else if (selectedType == 1) {
                     Box(
                         modifier = Modifier
-                            .size(height * 0.6.dp)
+                            .size((height * 0.6f).dp)
                             .clip(CircleShape)
                             .background(Color(0xFF333333))
                     )
